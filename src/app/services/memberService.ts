@@ -48,3 +48,38 @@ export async function createMember(params: {
   if (error) throw error;
   return data as MemberRecord;
 }
+
+export async function updateMember(
+  id: string,
+  params: Partial<{
+    firstName: string;
+    lastName: string;
+    phone: string | null;
+    email: string | null;
+    memberType: string;
+    status: string;
+  }>
+) {
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (params.firstName !== undefined) payload.first_name = params.firstName.trim();
+  if (params.lastName !== undefined) payload.last_name = params.lastName.trim();
+  if (params.phone !== undefined) payload.phone = params.phone?.trim() || null;
+  if (params.email !== undefined) payload.email = params.email?.trim() || null;
+  if (params.memberType !== undefined) payload.member_type = params.memberType;
+  if (params.status !== undefined) payload.status = params.status;
+
+  const { data, error } = await supabase
+    .from("members")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as MemberRecord;
+}
+
+export async function setMemberStatus(id: string, status: "active" | "inactive" | "archived") {
+  return updateMember(id, { status });
+}

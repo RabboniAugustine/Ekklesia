@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle, Search, UserPlus, Users } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 import {
   checkInMember,
   getTodayAttendanceCount,
@@ -8,9 +9,10 @@ import {
   type MemberSearchResult,
 } from "../../services/attendanceService";
 
-const TEMP_CHURCH_ID = import.meta.env.VITE_CHURCH_ID ?? "replace-with-your-supabase-church-id";
-
 export function Attendance() {
+  const { profile } = useAuth();
+  const churchId = profile?.church_id;
+
   const [searchTerm, setSearchTerm] = useState("");
   const [members, setMembers] = useState<MemberSearchResult[]>([]);
   const [message, setMessage] = useState("");
@@ -18,24 +20,19 @@ export function Attendance() {
   const [todayCount, setTodayCount] = useState(0);
   const [visitor, setVisitor] = useState({ firstName: "", lastName: "", phone: "", email: "" });
 
-  const churchIdReady = useMemo(
-    () => TEMP_CHURCH_ID && !TEMP_CHURCH_ID.startsWith("replace-with"),
-    []
-  );
-
   useEffect(() => {
-    if (!churchIdReady) return;
-    getTodayAttendanceCount(TEMP_CHURCH_ID)
+    if (!churchId) return;
+    getTodayAttendanceCount(churchId)
       .then(setTodayCount)
       .catch((error) => console.error(error));
-  }, [churchIdReady]);
+  }, [churchId]);
 
   async function handleSearch(value: string) {
     setSearchTerm(value);
     setMessage("");
 
-    if (!churchIdReady) {
-      setMessage("Add VITE_CHURCH_ID to .env.local before using attendance.");
+    if (!churchId) {
+      setMessage("Your profile isn't linked to a church yet.");
       return;
     }
 
@@ -45,7 +42,7 @@ export function Attendance() {
     }
 
     try {
-      const results = await searchMembersByName(TEMP_CHURCH_ID, value);
+      const results = await searchMembersByName(churchId, value);
       setMembers(results);
     } catch (error) {
       console.error(error);
@@ -54,12 +51,13 @@ export function Attendance() {
   }
 
   async function handleMemberCheckIn(member: MemberSearchResult) {
+    if (!churchId) return;
     const fullName = `${member.first_name} ${member.last_name}`;
 
     try {
       setLoading(true);
       await checkInMember({
-        churchId: TEMP_CHURCH_ID,
+        churchId,
         memberId: member.id,
         serviceName: "Sunday Service",
       });
@@ -77,8 +75,8 @@ export function Attendance() {
   }
 
   async function handleVisitorRegistration() {
-    if (!churchIdReady) {
-      setMessage("Add VITE_CHURCH_ID to .env.local before using attendance.");
+    if (!churchId) {
+      setMessage("Your profile isn't linked to a church yet.");
       return;
     }
 
@@ -90,7 +88,7 @@ export function Attendance() {
     try {
       setLoading(true);
       const result = await registerVisitorAndCheckIn({
-        churchId: TEMP_CHURCH_ID,
+        churchId,
         firstName: visitor.firstName,
         lastName: visitor.lastName,
         phone: visitor.phone,
@@ -129,9 +127,9 @@ export function Attendance() {
         </div>
       </div>
 
-      {!churchIdReady && (
+      {!churchId && (
         <div className="border border-amber-200 bg-amber-50 text-amber-800 rounded-lg p-4 text-sm">
-          Setup needed: add <strong>VITE_CHURCH_ID</strong> to your <strong>.env.local</strong> file after creating your church in Supabase.
+          Your profile isn't linked to a church yet. Contact an admin to get set up.
         </div>
       )}
 

@@ -5,9 +5,10 @@ import { signInWithEmailPassword } from "../services/authService";
 type SignInPageProps = {
   onBack: () => void;
   onSignedIn: () => void;
+  externalError?: string;
 };
 
-export function SignInPage({ onBack, onSignedIn }: SignInPageProps) {
+export function SignInPage({ onBack, onSignedIn, externalError }: SignInPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -46,9 +47,9 @@ export function SignInPage({ onBack, onSignedIn }: SignInPageProps) {
           Access your church management dashboard.
         </p>
 
-        {errorMessage && (
+        {(errorMessage || externalError) && (
           <div className="mt-4 border border-rose-200 bg-rose-50 text-rose-700 rounded-lg p-3 text-sm">
-            {errorMessage}
+            {errorMessage || externalError}
           </div>
         )}
 
