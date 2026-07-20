@@ -212,6 +212,11 @@ export function Members() {
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<MemberRecord | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+
+  const activeFilterCount = (statusFilter !== "all" ? 1 : 0) + (typeFilter !== "all" ? 1 : 0);
 
   async function load() {
     if (!profile?.church_id) return;
@@ -235,14 +240,18 @@ export function Members() {
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase().trim();
-    if (!term) return members;
-    return members.filter((m) =>
-      `${m.first_name} ${m.last_name}`.toLowerCase().includes(term) ||
-      (m.email ?? "").toLowerCase().includes(term) ||
-      (m.phone ?? "").toLowerCase().includes(term) ||
-      m.member_type.toLowerCase().includes(term)
-    );
-  }, [members, search]);
+    return members.filter((m) => {
+      if (statusFilter !== "all" && m.status !== statusFilter) return false;
+      if (typeFilter !== "all" && m.member_type !== typeFilter) return false;
+      if (!term) return true;
+      return (
+        `${m.first_name} ${m.last_name}`.toLowerCase().includes(term) ||
+        (m.email ?? "").toLowerCase().includes(term) ||
+        (m.phone ?? "").toLowerCase().includes(term) ||
+        m.member_type.toLowerCase().includes(term)
+      );
+    });
+  }, [members, search, statusFilter, typeFilter]);
 
   const stats = useMemo(() => {
     const total = members.length;
@@ -311,9 +320,63 @@ export function Members() {
           />
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg bg-card hover:bg-muted/60 transition-colors text-foreground">
-            <Filter size={14} /> Filter
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg bg-card hover:bg-muted/60 transition-colors text-foreground"
+            >
+              <Filter size={14} /> Filter
+              {activeFilterCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            {showFilters && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setShowFilters(false)} />
+                <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg p-4 z-40 space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="mt-1.5 w-full border border-border bg-background rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="all">All</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</label>
+                    <select
+                      value={typeFilter}
+                      onChange={(e) => setTypeFilter(e.target.value)}
+                      className="mt-1.5 w-full border border-border bg-background rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="all">All</option>
+                      {MEMBER_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {activeFilterCount > 0 && (
+                    <button
+                      onClick={() => { setStatusFilter("all"); setTypeFilter("all"); }}
+                      className="text-xs text-primary hover:text-primary/80"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => setShowAdd(true)}
             className="flex items-center gap-2 px-3 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
@@ -352,7 +415,7 @@ export function Members() {
             {!loading && filtered.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-5 py-8 text-center text-sm text-muted-foreground">
-                  {members.length === 0 ? "No members yet. Add your first one." : "No members match your search."}
+                  {members.length === 0 ? "No members yet. Add your first one." : "No members match your search or filters."}
                 </td>
               </tr>
             )}
