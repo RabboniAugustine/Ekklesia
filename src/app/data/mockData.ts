@@ -15,14 +15,6 @@ export const givingData = [
   { month: "Jul", tithes: 55200, offerings: 16300, special: 9200 },
 ];
 
-export const upcomingEvents = [
-  { id: 1, title: "Sunday Morning Service", date: "Jul 6, 2026", time: "9:00 AM", location: "Main Sanctuary", rsvp: 287, capacity: 400, type: "service" },
-  { id: 2, title: "Youth Bible Study", date: "Jul 8, 2026", time: "6:30 PM", location: "Room 204", rsvp: 43, capacity: 60, type: "study" },
-  { id: 3, title: "Worship Team Rehearsal", date: "Jul 9, 2026", time: "7:00 PM", location: "Music Room", rsvp: 18, capacity: 25, type: "rehearsal" },
-  { id: 4, title: "Community Outreach Day", date: "Jul 12, 2026", time: "8:00 AM", location: "Eastside Park", rsvp: 74, capacity: 120, type: "outreach" },
-  { id: 5, title: "Elder Board Meeting", date: "Jul 14, 2026", time: "10:00 AM", location: "Conference Room", rsvp: 9, capacity: 12, type: "meeting" },
-];
-
 export const recentDonations = [
   { name: "Emmanuel Tabi", amount: 1200, fund: "General Tithe", date: "Jul 3, 2026", method: "Online" },
   { name: "Grace Okonkwo", amount: 500, fund: "Building Fund", date: "Jul 3, 2026", method: "Card" },
