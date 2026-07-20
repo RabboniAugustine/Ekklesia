@@ -1,19 +1,9 @@
 // NOTE: everything in this file is placeholder data for modules that are
 // not yet wired to Supabase. As each module (Events, Finance, Ministries,
 // Communication, Reports) gets a real backend, its data should move out of
-// here and into a service file, the same way Members did.
+// here and into a service file, the same way Members and Dashboard did.
 
 import { Music, Baby, Globe, Mic, BookOpen, Heart } from "lucide-react";
-
-export const attendanceData = [
-  { month: "Jan", attendance: 312, new: 18 },
-  { month: "Feb", attendance: 298, new: 12 },
-  { month: "Mar", attendance: 341, new: 24 },
-  { month: "Apr", attendance: 355, new: 31 },
-  { month: "May", attendance: 368, new: 19 },
-  { month: "Jun", attendance: 391, new: 27 },
-  { month: "Jul", attendance: 410, new: 22 },
-];
 
 export const givingData = [
   { month: "Jan", tithes: 42000, offerings: 11000, special: 4500 },
@@ -23,13 +13,6 @@ export const givingData = [
   { month: "May", tithes: 51300, offerings: 14700, special: 6000 },
   { month: "Jun", tithes: 49600, offerings: 13900, special: 5400 },
   { month: "Jul", tithes: 55200, offerings: 16300, special: 9200 },
-];
-
-export const memberDistribution = [
-  { name: "Active", value: 487, color: "#1a4fd6" },
-  { name: "Inactive", value: 83, color: "#dbeafe" },
-  { name: "Visitors", value: 62, color: "#0ea5e9" },
-  { name: "Children", value: 144, color: "#6366f1" },
 ];
 
 export const upcomingEvents = [
