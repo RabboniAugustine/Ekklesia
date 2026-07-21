@@ -10,20 +10,26 @@ export type EventRecord = {
   start_at: string;
   end_at: string | null;
   capacity: number | null;
-  rsvp_count: number;
   status: string;
+  series_id: string | null;
   created_at: string;
 };
 
-export async function listUpcomingEvents(churchId: string) {
-  const { data, error } = await supabase
+const EVENT_COLUMNS =
+  "id, church_id, title, description, location, event_type, start_at, end_at, capacity, status, series_id, created_at";
+
+export async function listUpcomingEvents(churchId: string, limit?: number) {
+  let query = supabase
     .from("events")
-    .select("id, church_id, title, description, location, event_type, start_at, end_at, capacity, rsvp_count, status, created_at")
+    .select(EVENT_COLUMNS)
     .eq("church_id", churchId)
     .neq("status", "cancelled")
     .gte("start_at", new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString()) // include events from the last 6h
     .order("start_at", { ascending: true });
 
+  if (limit) query = query.limit(limit);
+
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as EventRecord[];
 }
@@ -31,7 +37,7 @@ export async function listUpcomingEvents(churchId: string) {
 export async function listPastEvents(churchId: string, limit = 10) {
   const { data, error } = await supabase
     .from("events")
-    .select("id, church_id, title, description, location, event_type, start_at, end_at, capacity, rsvp_count, status, created_at")
+    .select(EVENT_COLUMNS)
     .eq("church_id", churchId)
     .lt("start_at", new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString())
     .order("start_at", { ascending: false })
@@ -41,7 +47,7 @@ export async function listPastEvents(churchId: string, limit = 10) {
   return (data ?? []) as EventRecord[];
 }
 
-export async function createEvent(params: {
+type CreateEventParams = {
   churchId: string;
   createdBy?: string;
   title: string;
@@ -51,7 +57,9 @@ export async function createEvent(params: {
   startAt: string;
   endAt?: string;
   capacity?: number | null;
-}) {
+};
+
+export async function createEvent(params: CreateEventParams) {
   const { data, error } = await supabase
     .from("events")
     .insert({
@@ -70,6 +78,47 @@ export async function createEvent(params: {
 
   if (error) throw error;
   return data as EventRecord;
+}
+
+export type RepeatFrequency = "weekly" | "biweekly" | "monthly";
+
+function addOccurrence(date: Date, frequency: RepeatFrequency, index: number) {
+  const d = new Date(date);
+  if (frequency === "weekly") d.setDate(d.getDate() + 7 * index);
+  else if (frequency === "biweekly") d.setDate(d.getDate() + 14 * index);
+  else if (frequency === "monthly") d.setMonth(d.getMonth() + index);
+  return d;
+}
+
+/** Creates a series of events sharing a series_id, one per occurrence. */
+export async function createEventSeries(
+  params: CreateEventParams & { frequency: RepeatFrequency; occurrences: number }
+) {
+  const seriesId = crypto.randomUUID();
+  const startDate = new Date(params.startAt);
+  const endDate = params.endAt ? new Date(params.endAt) : null;
+  const durationMs = endDate ? endDate.getTime() - startDate.getTime() : null;
+
+  const rows = Array.from({ length: params.occurrences }, (_, i) => {
+    const occurrenceStart = addOccurrence(startDate, params.frequency, i);
+    const occurrenceEnd = durationMs != null ? new Date(occurrenceStart.getTime() + durationMs) : null;
+    return {
+      church_id: params.churchId,
+      created_by: params.createdBy ?? null,
+      title: params.title.trim(),
+      description: params.description?.trim() || null,
+      location: params.location?.trim() || null,
+      event_type: params.eventType,
+      start_at: occurrenceStart.toISOString(),
+      end_at: occurrenceEnd ? occurrenceEnd.toISOString() : null,
+      capacity: params.capacity ?? null,
+      series_id: seriesId,
+    };
+  });
+
+  const { data, error } = await supabase.from("events").insert(rows).select();
+  if (error) throw error;
+  return (data ?? []) as EventRecord[];
 }
 
 export async function updateEvent(
@@ -109,16 +158,4 @@ export async function updateEvent(
 
 export async function cancelEvent(id: string) {
   return updateEvent(id, { status: "cancelled" });
-}
-
-export async function setRsvpCount(id: string, rsvpCount: number) {
-  const { data, error } = await supabase
-    .from("events")
-    .update({ rsvp_count: Math.max(0, rsvpCount), updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data as EventRecord;
 }

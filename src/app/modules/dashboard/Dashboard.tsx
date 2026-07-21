@@ -3,7 +3,7 @@ import {
   AreaChart, Area, PieChart, Pie, Cell,
   ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { Users, BarChart2, DollarSign, Heart, Calendar, MessageSquare } from "lucide-react";
+import { Users, BarChart2, DollarSign, Heart, Calendar, MessageSquare, MapPin } from "lucide-react";
 import { StatCard } from "../../components/shared/StatCard";
 import { SectionHeader } from "../../components/shared/SectionHeader";
 import { ComingSoonCard } from "../../components/shared/ComingSoonCard";
@@ -12,6 +12,7 @@ import {
   getMemberSummary, getAttendanceTrend, getLatestServiceStat,
   type MemberSummary, type MonthlyAttendance, type LatestServiceStat,
 } from "../../services/dashboardService";
+import { listUpcomingEvents, type EventRecord } from "../../services/eventService";
 
 function pctChange(current: number, previous: number) {
   if (previous === 0) return current > 0 ? "New activity" : "No change";
@@ -27,6 +28,7 @@ export function Dashboard() {
   const [memberSummary, setMemberSummary] = useState<MemberSummary | null>(null);
   const [trend, setTrend] = useState<MonthlyAttendance[]>([]);
   const [latestService, setLatestService] = useState<LatestServiceStat | null>(null);
+  const [upcomingEvents, setUpcomingEvents] = useState<EventRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
@@ -40,11 +42,13 @@ export function Dashboard() {
       getMemberSummary(churchId),
       getAttendanceTrend(churchId),
       getLatestServiceStat(churchId),
+      listUpcomingEvents(churchId, 5),
     ])
-      .then(([summary, attendanceTrend, service]) => {
+      .then(([summary, attendanceTrend, service, events]) => {
         setMemberSummary(summary);
         setTrend(attendanceTrend);
         setLatestService(service);
+        setUpcomingEvents(events);
       })
       .catch((err) => {
         console.error(err);
@@ -167,10 +171,41 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Placeholders for modules not built yet */}
+      {/* Placeholders for modules not built yet, plus real Upcoming Events */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ComingSoonCard icon={DollarSign} title="Recent Donations" note="Not tracked yet — needs the Finance module" />
-        <ComingSoonCard icon={Calendar} title="Upcoming Events" note="Not tracked yet — needs the Events module" />
+
+        <div className="bg-card border border-border rounded-lg p-6">
+          <SectionHeader title="Upcoming Events" />
+          {loading ? (
+            <p className="text-sm text-muted-foreground py-16 text-center">Loading...</p>
+          ) : upcomingEvents.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-16 text-center">No upcoming events.</p>
+          ) : (
+            <div className="space-y-3">
+              {upcomingEvents.map((e) => (
+                <div key={e.id} className="flex items-start gap-3 py-2.5 border-b border-border last:border-0">
+                  <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-primary shrink-0">
+                    <Calendar size={14} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground leading-tight">{e.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {new Date(e.start_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      {" · "}
+                      {new Date(e.start_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                    </p>
+                    {e.location && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <MapPin size={10} />{e.location}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <ComingSoonCard icon={MessageSquare} title="Prayer Requests" note="Not tracked yet — needs the Communication module" />

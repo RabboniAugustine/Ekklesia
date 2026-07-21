@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, MapPin, X, Minus } from "lucide-react";
-import { ComingSoonCard } from "../../components/shared/ComingSoonCard";
+import { Plus, MapPin, X, Repeat } from "lucide-react";
+import { Badge } from "../../components/shared/Badge";
 import { useAuth } from "../../context/AuthContext";
 import {
   listUpcomingEvents,
   createEvent,
+  createEventSeries,
   updateEvent,
   cancelEvent,
-  setRsvpCount,
   type EventRecord,
+  type RepeatFrequency,
 } from "../../services/eventService";
 
 const EVENT_TYPES = [
@@ -28,10 +29,6 @@ const TYPE_STYLES: Record<string, string> = {
   meeting: "bg-slate-50 border-slate-200",
   other: "bg-slate-50 border-slate-200",
 };
-
-function typeLabel(value: string) {
-  return EVENT_TYPES.find((t) => t.value === value)?.label ?? value;
-}
 
 function toLocalInputValue(iso: string | null) {
   if (!iso) return "";
@@ -63,6 +60,8 @@ type FormState = {
   startAt: string;
   endAt: string;
   capacity: string;
+  repeatFrequency: "none" | RepeatFrequency;
+  occurrences: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -73,12 +72,15 @@ const EMPTY_FORM: FormState = {
   startAt: "",
   endAt: "",
   capacity: "",
+  repeatFrequency: "none",
+  occurrences: "12",
 };
 
 function EventFormModal({
   title,
   initial,
   submitLabel,
+  allowRepeat,
   onCancel,
   onSubmit,
   extraAction,
@@ -86,6 +88,7 @@ function EventFormModal({
   title: string;
   initial: FormState;
   submitLabel: string;
+  allowRepeat?: boolean;
   onCancel: () => void;
   onSubmit: (form: FormState) => Promise<void>;
   extraAction?: React.ReactNode;
@@ -105,6 +108,13 @@ function EventFormModal({
     if (!form.startAt) {
       setError("Start date and time are required.");
       return;
+    }
+    if (form.repeatFrequency !== "none") {
+      const count = Number(form.occurrences);
+      if (!count || count < 2 || count > 52) {
+        setError("Number of occurrences must be between 2 and 52.");
+        return;
+      }
     }
 
     try {
@@ -161,7 +171,9 @@ function EventFormModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-foreground">Starts</label>
+              <label className="text-sm font-medium text-foreground">
+                {form.repeatFrequency !== "none" ? "First occurrence starts" : "Starts"}
+              </label>
               <input
                 type="datetime-local"
                 value={form.startAt}
@@ -215,6 +227,46 @@ function EventFormModal({
               />
             </div>
           </div>
+
+          {allowRepeat && (
+            <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/30">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Repeat size={14} /> Repeats
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <select
+                    value={form.repeatFrequency}
+                    onChange={(e) => setForm((f) => ({ ...f, repeatFrequency: e.target.value as FormState["repeatFrequency"] }))}
+                    className="w-full border border-border bg-background rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="none">Does not repeat</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Every 2 weeks</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+                {form.repeatFrequency !== "none" && (
+                  <div>
+                    <input
+                      type="number"
+                      min={2}
+                      max={52}
+                      value={form.occurrences}
+                      onChange={(e) => setForm((f) => ({ ...f, occurrences: e.target.value }))}
+                      className="w-full border border-border bg-background rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="Number of occurrences"
+                    />
+                  </div>
+                )}
+              </div>
+              {form.repeatFrequency !== "none" && (
+                <p className="text-xs text-muted-foreground">
+                  Creates {form.occurrences || "0"} separate events. Editing one later only changes that occurrence, not the whole series.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-between pt-2">
             <div>{extraAction}</div>
@@ -273,18 +325,36 @@ export function Events() {
 
   async function handleCreate(form: FormState) {
     if (!profile?.church_id) return;
-    const created = await createEvent({
-      churchId: profile.church_id,
-      createdBy: profile.id,
-      title: form.title,
-      description: form.description || undefined,
-      location: form.location || undefined,
-      eventType: form.eventType,
-      startAt: new Date(form.startAt).toISOString(),
-      endAt: form.endAt ? new Date(form.endAt).toISOString() : undefined,
-      capacity: form.capacity ? Number(form.capacity) : null,
-    });
-    setEvents((prev) => [...prev, created].sort((a, b) => a.start_at.localeCompare(b.start_at)));
+
+    if (form.repeatFrequency !== "none") {
+      const created = await createEventSeries({
+        churchId: profile.church_id,
+        createdBy: profile.id,
+        title: form.title,
+        description: form.description || undefined,
+        location: form.location || undefined,
+        eventType: form.eventType,
+        startAt: new Date(form.startAt).toISOString(),
+        endAt: form.endAt ? new Date(form.endAt).toISOString() : undefined,
+        capacity: form.capacity ? Number(form.capacity) : null,
+        frequency: form.repeatFrequency,
+        occurrences: Number(form.occurrences),
+      });
+      setEvents((prev) => [...prev, ...created].sort((a, b) => a.start_at.localeCompare(b.start_at)));
+    } else {
+      const created = await createEvent({
+        churchId: profile.church_id,
+        createdBy: profile.id,
+        title: form.title,
+        description: form.description || undefined,
+        location: form.location || undefined,
+        eventType: form.eventType,
+        startAt: new Date(form.startAt).toISOString(),
+        endAt: form.endAt ? new Date(form.endAt).toISOString() : undefined,
+        capacity: form.capacity ? Number(form.capacity) : null,
+      });
+      setEvents((prev) => [...prev, created].sort((a, b) => a.start_at.localeCompare(b.start_at)));
+    }
     setShowAdd(false);
   }
 
@@ -310,15 +380,6 @@ export function Events() {
     setEditing(null);
   }
 
-  async function adjustRsvp(ev: EventRecord, delta: number) {
-    try {
-      const updated = await setRsvpCount(ev.id, ev.rsvp_count + delta);
-      setEvents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
@@ -337,76 +398,47 @@ export function Events() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-3">
-          {loading && (
-            <div className="bg-card border border-border rounded-lg p-8 text-center text-sm text-muted-foreground">
-              Loading events...
-            </div>
-          )}
+      <div className="space-y-3">
+        {loading && (
+          <div className="bg-card border border-border rounded-lg p-8 text-center text-sm text-muted-foreground">
+            Loading events...
+          </div>
+        )}
 
-          {!loading && events.length === 0 && (
-            <div className="bg-card border border-border rounded-lg p-8 text-center text-sm text-muted-foreground">
-              No upcoming events. Add your first one.
-            </div>
-          )}
+        {!loading && events.length === 0 && (
+          <div className="bg-card border border-border rounded-lg p-8 text-center text-sm text-muted-foreground">
+            No upcoming events. Add your first one.
+          </div>
+        )}
 
-          {!loading && events.map((e) => {
-            const pct = e.capacity ? Math.round((e.rsvp_count / e.capacity) * 100) : null;
-            const badge = formatDateBadge(e.start_at);
-            return (
-              <div key={e.id} className={`bg-card border rounded-lg p-5 flex items-start gap-4 ${TYPE_STYLES[e.event_type] || "border-border"}`}>
-                <div className="bg-primary text-primary-foreground rounded-lg w-12 h-12 flex flex-col items-center justify-center shrink-0">
-                  <span className="text-xs font-medium leading-tight">{badge.month}</span>
-                  <span className="text-lg font-bold leading-tight">{badge.day}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground">{e.title}</p>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    {formatTimeRange(e.start_at, e.end_at)}
-                    {e.location && <> · <span className="inline-flex items-center gap-1"><MapPin size={11} />{e.location}</span></>}
-                  </p>
-                  <div className="mt-3 flex items-center gap-3">
-                    <button
-                      onClick={() => adjustRsvp(e, -1)}
-                      disabled={e.rsvp_count <= 0}
-                      className="w-6 h-6 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-40 shrink-0"
-                    >
-                      <Minus size={11} />
-                    </button>
-                    {pct !== null ? (
-                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
-                      </div>
-                    ) : (
-                      <div className="flex-1" />
-                    )}
-                    <button
-                      onClick={() => adjustRsvp(e, 1)}
-                      className="w-6 h-6 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:bg-muted shrink-0"
-                    >
-                      <Plus size={11} />
-                    </button>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {e.rsvp_count}{e.capacity ? `/${e.capacity}` : ""} RSVPs
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setEditing(e)}
-                  className="text-xs font-medium text-primary hover:text-primary/80 transition-colors shrink-0"
-                >
-                  Manage
-                </button>
+        {!loading && events.map((e) => {
+          const badge = formatDateBadge(e.start_at);
+          return (
+            <div key={e.id} className={`bg-card border rounded-lg p-5 flex items-start gap-4 ${TYPE_STYLES[e.event_type] || "border-border"}`}>
+              <div className="bg-primary text-primary-foreground rounded-lg w-12 h-12 flex flex-col items-center justify-center shrink-0">
+                <span className="text-xs font-medium leading-tight">{badge.month}</span>
+                <span className="text-lg font-bold leading-tight">{badge.day}</span>
               </div>
-            );
-          })}
-        </div>
-
-        <div className="space-y-5">
-          <ComingSoonCard icon={MapPin} title="Room Bookings" note="Not tracked yet — needs a rooms/scheduling module" />
-          <ComingSoonCard icon={Plus} title="Recurring Services" note="Not tracked yet — each event is created individually for now" />
-        </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-foreground">{e.title}</p>
+                  {e.series_id && <Badge variant="info">Recurring</Badge>}
+                </div>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {formatTimeRange(e.start_at, e.end_at)}
+                  {e.location && <> · <span className="inline-flex items-center gap-1"><MapPin size={11} />{e.location}</span></>}
+                  {e.capacity != null && <> · Capacity {e.capacity}</>}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditing(e)}
+                className="text-xs font-medium text-primary hover:text-primary/80 transition-colors shrink-0"
+              >
+                Manage
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       {showAdd && (
@@ -414,6 +446,7 @@ export function Events() {
           title="New Event"
           initial={EMPTY_FORM}
           submitLabel="Create Event"
+          allowRepeat
           onCancel={() => setShowAdd(false)}
           onSubmit={handleCreate}
         />
@@ -430,6 +463,8 @@ export function Events() {
             startAt: toLocalInputValue(editing.start_at),
             endAt: toLocalInputValue(editing.end_at),
             capacity: editing.capacity != null ? String(editing.capacity) : "",
+            repeatFrequency: "none",
+            occurrences: "12",
           }}
           submitLabel="Save Changes"
           onCancel={() => setEditing(null)}
