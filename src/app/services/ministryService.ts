@@ -8,30 +8,21 @@ export type MinistryRecord = {
   leader_member_id: string | null;
   status: string;
   created_at: string;
-  leader: { first_name: string; last_name: string } | null;
   member_count: number;
 };
 
-export type RosterEntry = {
-  id: string;
-  ministry_id: string;
-  member_id: string;
-  role_title: string | null;
-  created_at: string;
-  member: { first_name: string; last_name: string } | null;
-};
+const MINISTRY_COLUMNS = "id, church_id, name, description, leader_member_id, status, created_at";
 
 export async function listMinistries(churchId: string): Promise<MinistryRecord[]> {
   const { data: ministries, error } = await supabase
     .from("ministries")
-    .select("id, church_id, name, description, leader_member_id, status, created_at, leader:members!leader_member_id(first_name, last_name)")
+    .select(MINISTRY_COLUMNS)
     .eq("church_id", churchId)
     .order("name", { ascending: true });
 
   if (error) throw error;
 
-  const list = (ministries ?? []) as unknown as Array<Omit<MinistryRecord, "member_count">>;
-
+  const list = (ministries ?? []) as Array<Omit<MinistryRecord, "member_count">>;
   if (list.length === 0) return [];
 
   const ids = list.map((m) => m.id);
@@ -64,11 +55,11 @@ export async function createMinistry(params: {
       description: params.description?.trim() || null,
       leader_member_id: params.leaderMemberId || null,
     })
-    .select("id, church_id, name, description, leader_member_id, status, created_at, leader:members!leader_member_id(first_name, last_name)")
+    .select(MINISTRY_COLUMNS)
     .single();
 
   if (error) throw error;
-  return { ...(data as unknown as Omit<MinistryRecord, "member_count">), member_count: 0 };
+  return { ...(data as Omit<MinistryRecord, "member_count">), member_count: 0 };
 }
 
 export async function updateMinistry(
@@ -85,37 +76,45 @@ export async function updateMinistry(
     .from("ministries")
     .update(payload)
     .eq("id", id)
-    .select("id, church_id, name, description, leader_member_id, status, created_at, leader:members!leader_member_id(first_name, last_name)")
+    .select(MINISTRY_COLUMNS)
     .single();
 
   if (error) throw error;
-  return data as unknown as Omit<MinistryRecord, "member_count">;
+  return data as Omit<MinistryRecord, "member_count">;
 }
 
 export async function setMinistryStatus(id: string, status: "active" | "inactive") {
   return updateMinistry(id, { status });
 }
 
+export type RosterEntry = {
+  id: string;
+  ministry_id: string;
+  member_id: string;
+  role_title: string | null;
+  created_at: string;
+};
+
 export async function listRoster(ministryId: string): Promise<RosterEntry[]> {
   const { data, error } = await supabase
     .from("ministry_members")
-    .select("id, ministry_id, member_id, role_title, created_at, member:members(first_name, last_name)")
+    .select("id, ministry_id, member_id, role_title, created_at")
     .eq("ministry_id", ministryId)
     .order("created_at", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []) as unknown as RosterEntry[];
+  return (data ?? []) as RosterEntry[];
 }
 
 export async function addRosterMember(ministryId: string, memberId: string, roleTitle?: string) {
   const { data, error } = await supabase
     .from("ministry_members")
     .insert({ ministry_id: ministryId, member_id: memberId, role_title: roleTitle?.trim() || null })
-    .select("id, ministry_id, member_id, role_title, created_at, member:members(first_name, last_name)")
+    .select("id, ministry_id, member_id, role_title, created_at")
     .single();
 
   if (error) throw error;
-  return data as unknown as RosterEntry;
+  return data as RosterEntry;
 }
 
 export async function removeRosterMember(id: string) {

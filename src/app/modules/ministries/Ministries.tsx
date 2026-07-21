@@ -24,8 +24,10 @@ const CARD_COLORS = [
   "bg-red-100 text-red-700",
 ];
 
-function memberName(m: { first_name: string; last_name: string } | null) {
-  return m ? `${m.first_name} ${m.last_name}` : "No leader assigned";
+function nameForMemberId(memberId: string | null, members: MemberRecord[], fallback: string) {
+  if (!memberId) return fallback;
+  const m = members.find((mem) => mem.id === memberId);
+  return m ? `${m.first_name} ${m.last_name}` : fallback;
 }
 
 type FormState = {
@@ -258,7 +260,7 @@ function RosterModal({
             {roster.map((r) => (
               <div key={r.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                 <div>
-                  <p className="text-sm font-medium text-foreground">{memberName(r.member)}</p>
+                  <p className="text-sm font-medium text-foreground">{nameForMemberId(r.member_id, members, "Unknown member")}</p>
                   {r.role_title && <p className="text-xs text-muted-foreground">{r.role_title}</p>}
                 </div>
                 <button onClick={() => handleRemove(r.id)} className="text-muted-foreground hover:text-rose-600 transition-colors">
@@ -285,21 +287,28 @@ export function Ministries() {
 
   async function load() {
     if (!profile?.church_id) return;
-    try {
-      setLoading(true);
-      setLoadError("");
-      const [ministryList, memberList] = await Promise.all([
-        listMinistries(profile.church_id),
-        listMembers(profile.church_id),
-      ]);
-      setMinistries(ministryList);
-      setMembers(memberList);
-    } catch (err) {
-      console.error(err);
+    setLoading(true);
+    setLoadError("");
+
+    const [ministriesResult, membersResult] = await Promise.allSettled([
+      listMinistries(profile.church_id),
+      listMembers(profile.church_id),
+    ]);
+
+    if (ministriesResult.status === "fulfilled") {
+      setMinistries(ministriesResult.value);
+    } else {
+      console.error(ministriesResult.reason);
       setLoadError("Could not load ministries. Please refresh and try again.");
-    } finally {
-      setLoading(false);
     }
+
+    if (membersResult.status === "fulfilled") {
+      setMembers(membersResult.value);
+    } else {
+      console.error(membersResult.reason);
+    }
+
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -376,7 +385,7 @@ export function Ministries() {
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">{m.name}</p>
-                  <p className="text-xs text-muted-foreground">{memberName(m.leader)}</p>
+                  <p className="text-xs text-muted-foreground">{nameForMemberId(m.leader_member_id, members, "No leader assigned")}</p>
                 </div>
               </div>
               <button
