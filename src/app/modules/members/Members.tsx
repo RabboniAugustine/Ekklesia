@@ -37,6 +37,7 @@ type FormState = {
   email: string;
   memberType: string;
   status: string;
+  baptismDate: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -46,6 +47,7 @@ const EMPTY_FORM: FormState = {
   email: "",
   memberType: "member",
   status: "active",
+  baptismDate: "",
 };
 
 function MemberFormModal({
@@ -179,6 +181,16 @@ function MemberFormModal({
             )}
           </div>
 
+          <div>
+            <label className="text-sm font-medium text-foreground">Baptism date</label>
+            <input
+              type="date"
+              value={form.baptismDate}
+              onChange={(e) => setForm((f) => ({ ...f, baptismDate: e.target.value }))}
+              className="mt-1 w-full border border-border bg-background rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+
           <div className="flex items-center justify-between pt-2">
             <div>{extraAction}</div>
             <div className="flex gap-2">
@@ -281,6 +293,7 @@ export function Members() {
       phone: form.phone || undefined,
       email: form.email || undefined,
       memberType: form.memberType,
+      baptismDate: form.baptismDate || null,
     });
     setMembers((prev) => [...prev, created].sort((a, b) => a.last_name.localeCompare(b.last_name)));
     setShowAdd(false);
@@ -295,6 +308,7 @@ export function Members() {
       email: form.email,
       memberType: form.memberType,
       status: form.status,
+      baptismDate: form.baptismDate || null,
     });
     setMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
     setEditing(null);
@@ -509,6 +523,7 @@ export function Members() {
             email: editing.email ?? "",
             memberType: editing.member_type,
             status: editing.status,
+            baptismDate: editing.baptism_date ?? "",
           }}
           submitLabel="Save Changes"
           showStatus

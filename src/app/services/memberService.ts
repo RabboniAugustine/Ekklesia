@@ -9,13 +9,14 @@ export type MemberRecord = {
   email: string | null;
   member_type: string;
   status: string;
+  baptism_date: string | null;
   created_at: string;
 };
 
 export async function listMembers(churchId: string) {
   const { data, error } = await supabase
     .from("members")
-    .select("id, church_id, first_name, last_name, phone, email, member_type, status, created_at")
+    .select("id, church_id, first_name, last_name, phone, email, member_type, status, baptism_date, created_at")
     .eq("church_id", churchId)
     .order("last_name", { ascending: true });
 
@@ -30,6 +31,7 @@ export async function createMember(params: {
   phone?: string;
   email?: string;
   memberType?: string;
+  baptismDate?: string | null;
 }) {
   const { data, error } = await supabase
     .from("members")
@@ -40,6 +42,7 @@ export async function createMember(params: {
       phone: params.phone?.trim() || null,
       email: params.email?.trim() || null,
       member_type: params.memberType ?? "member",
+      baptism_date: params.baptismDate || null,
       status: "active",
     })
     .select()
@@ -58,6 +61,7 @@ export async function updateMember(
     email: string | null;
     memberType: string;
     status: string;
+    baptismDate: string | null;
   }>
 ) {
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -68,6 +72,7 @@ export async function updateMember(
   if (params.email !== undefined) payload.email = params.email?.trim() || null;
   if (params.memberType !== undefined) payload.member_type = params.memberType;
   if (params.status !== undefined) payload.status = params.status;
+  if (params.baptismDate !== undefined) payload.baptism_date = params.baptismDate || null;
 
   const { data, error } = await supabase
     .from("members")
