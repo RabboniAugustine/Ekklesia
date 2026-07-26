@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Bell, Search, ChevronDown, Shield, Menu, LogOut, Settings,
+  Bell, Search, ChevronDown, Shield, Menu, LogOut,
 } from "lucide-react";
 
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -14,6 +14,7 @@ import { Finance } from "./modules/finance/Finance";
 import { Ministries } from "./modules/ministries/Ministries";
 import { Communication } from "./modules/communication/Communication";
 import { Reports } from "./modules/reports/Reports";
+import { Settings } from "./modules/settings/Settings";
 import { navItems } from "./nav";
 import type { NavModule } from "./types";
 
@@ -44,14 +45,7 @@ function AppShell() {
       case "ministries": return <Ministries />;
       case "communication": return <Communication />;
       case "reports": return <Reports />;
-      case "settings":
-        return (
-          <div className="bg-card border border-border rounded-lg p-8 text-center">
-            <Settings size={32} className="text-muted-foreground mx-auto mb-3" />
-            <p className="text-base font-semibold text-foreground">System Settings</p>
-            <p className="text-sm text-muted-foreground mt-1">Church configuration, roles, integrations, and security options.</p>
-          </div>
-        );
+      case "settings": return <Settings />;
     }
   };
 
