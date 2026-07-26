@@ -3,7 +3,7 @@ import {
   AreaChart, Area, PieChart, Pie, Cell,
   ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { Users, BarChart2, DollarSign, Heart, Calendar, MessageSquare, MapPin } from "lucide-react";
+import { Users, BarChart2, DollarSign, Heart, Calendar, MapPin } from "lucide-react";
 import { StatCard } from "../../components/shared/StatCard";
 import { SectionHeader } from "../../components/shared/SectionHeader";
 import { ComingSoonCard } from "../../components/shared/ComingSoonCard";
@@ -13,6 +13,8 @@ import {
   type MemberSummary, type MonthlyAttendance, type LatestServiceStat,
 } from "../../services/dashboardService";
 import { listUpcomingEvents, type EventRecord } from "../../services/eventService";
+import { listPrayerRequests, type PrayerRequest } from "../../services/communicationService";
+import { listMinistries } from "../../services/ministryService";
 
 function pctChange(current: number, previous: number) {
   if (previous === 0) return current > 0 ? "New activity" : "No change";
@@ -29,6 +31,8 @@ export function Dashboard() {
   const [trend, setTrend] = useState<MonthlyAttendance[]>([]);
   const [latestService, setLatestService] = useState<LatestServiceStat | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<EventRecord[]>([]);
+  const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>([]);
+  const [activeMinistries, setActiveMinistries] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
@@ -43,12 +47,16 @@ export function Dashboard() {
       getAttendanceTrend(churchId),
       getLatestServiceStat(churchId),
       listUpcomingEvents(churchId, 5),
+      listPrayerRequests(churchId),
+      listMinistries(churchId),
     ])
-      .then(([summary, attendanceTrend, service, events]) => {
+      .then(([summary, attendanceTrend, service, events, prayers, ministries]) => {
         setMemberSummary(summary);
         setTrend(attendanceTrend);
         setLatestService(service);
         setUpcomingEvents(events);
+        setPrayerRequests(prayers.filter((p) => p.status === "open").slice(0, 4));
+        setActiveMinistries(ministries.filter((m) => m.status === "active").length);
       })
       .catch((err) => {
         console.error(err);
@@ -108,7 +116,14 @@ export function Dashboard() {
           color="bg-violet-50 text-violet-700"
         />
         <ComingSoonCard icon={DollarSign} title="Monthly Giving" note="Not tracked yet — needs the Finance module" />
-        <ComingSoonCard icon={Heart} title="Active Ministries" note="Not tracked yet — needs the Ministries module" />
+        <StatCard
+          label="Active Ministries"
+          value={loading ? "—" : String(activeMinistries ?? 0)}
+          sub={loading ? "Loading..." : "Currently active"}
+          trend="neutral"
+          icon={Heart}
+          color="bg-rose-50 text-rose-600"
+        />
       </div>
 
       {/* Charts row */}
@@ -208,7 +223,28 @@ export function Dashboard() {
         </div>
       </div>
 
-      <ComingSoonCard icon={MessageSquare} title="Prayer Requests" note="Not tracked yet — needs the Communication module" />
+      <div className="bg-card border border-border rounded-lg p-6">
+        <SectionHeader title="Prayer Requests" />
+        {loading ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Loading...</p>
+        ) : prayerRequests.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">No open prayer requests.</p>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {prayerRequests.map((p) => (
+              <div key={p.id} className="flex items-start gap-3 p-3.5 rounded-lg bg-muted/60">
+                <Heart size={15} className="text-rose-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-foreground">{p.request}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {p.is_private ? "Anonymous" : p.requester_name || "Anonymous"}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

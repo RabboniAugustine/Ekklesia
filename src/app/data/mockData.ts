@@ -31,10 +31,3 @@ export const ministries = [
   { name: "Biblical Education", leader: "Pastor Ruth Nkrumah", members: 28, icon: BookOpen, color: "bg-amber-100 text-amber-700" },
   { name: "Prayer & Intercession", leader: "Elder Asiedu", members: 19, icon: Heart, color: "bg-red-100 text-red-700" },
 ];
-
-export const prayerRequests = [
-  { name: "Anonymous", request: "Healing for chronic back pain", date: "Jul 3", private: true },
-  { name: "Ruth Andersen", request: "Guidance in career decision", date: "Jul 2", private: false },
-  { name: "Anonymous", request: "Restoration of a broken marriage", date: "Jul 1", private: true },
-  { name: "Michael Asante", request: "Financial breakthrough and wisdom", date: "Jun 30", private: false },
-];
