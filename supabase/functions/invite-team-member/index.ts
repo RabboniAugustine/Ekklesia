@@ -84,8 +84,24 @@ Deno.serve(async (req) => {
     );
 
     const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email);
+
+    let userId: string;
+
     if (inviteError || !inviteData.user) {
-      return jsonResponse({ error: inviteError?.message ?? "Could not send invite" }, 400);
+      // If this email already has an auth account (e.g. left over from an
+      // earlier attempt that didn't fully clean up), don't fail - find that
+      // account and link/update their profile instead of erroring out.
+      const { data: existingUsersPage, error: listError } = await adminClient.auth.admin.listUsers();
+      const existingUser = !listError
+        ? existingUsersPage.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
+        : null;
+
+      if (!existingUser) {
+        return jsonResponse({ error: inviteError?.message ?? "Could not send invite" }, 400);
+      }
+      userId = existingUser.id;
+    } else {
+      userId = inviteData.user.id;
     }
 
     // Upsert rather than insert: some Supabase projects have a trigger that
@@ -95,7 +111,7 @@ Deno.serve(async (req) => {
     // exists yet, or filling in the correct church_id/role/name if one
     // already got created.
     const { error: upsertError } = await adminClient.from("profiles").upsert({
-      id: inviteData.user.id,
+      id: userId,
       church_id: callerProfile.church_id,
       full_name: fullName,
       email,
@@ -104,13 +120,15 @@ Deno.serve(async (req) => {
     });
 
     if (upsertError) {
-      // Only roll back the auth user for genuine failures (e.g. bad role
-      // value), not ones caused by a pre-existing row we just handled above.
-      await adminClient.auth.admin.deleteUser(inviteData.user.id);
+      // Only roll back a brand-new auth user we just created this call -
+      // never delete an account that already existed before this request.
+      if (inviteData?.user) {
+        await adminClient.auth.admin.deleteUser(userId);
+      }
       return jsonResponse({ error: upsertError.message }, 400);
     }
 
-    return jsonResponse({ success: true, userId: inviteData.user.id });
+    return jsonResponse({ success: true, userId });
   } catch (err) {
     return jsonResponse({ error: String(err) }, 500);
   }
