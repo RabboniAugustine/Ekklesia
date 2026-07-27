@@ -87,7 +87,18 @@ export async function inviteTeamMember(params: { email: string; fullName: string
     body: { email: params.email.trim(), fullName: params.fullName.trim(), role: params.role },
   });
 
-  if (error) throw error;
+  if (error) {
+    // supabase-js only gives a generic "non-2xx status code" message by
+    // default - the real reason is in the response body.
+    let detail = error.message;
+    try {
+      const body = await error.context?.json();
+      if (body?.error) detail = body.error;
+    } catch {
+      // response body wasn't JSON or already consumed - fall back to the generic message
+    }
+    throw new Error(detail);
+  }
   if (data?.error) throw new Error(data.error);
   return data as { success: true; userId: string };
 }

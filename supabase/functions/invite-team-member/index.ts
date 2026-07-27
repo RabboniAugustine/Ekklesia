@@ -88,7 +88,13 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: inviteError?.message ?? "Could not send invite" }, 400);
     }
 
-    const { error: insertError } = await adminClient.from("profiles").insert({
+    // Upsert rather than insert: some Supabase projects have a trigger that
+    // auto-creates a bare profiles row whenever a new auth.users row
+    // appears. If that's the case here, a plain insert would collide with
+    // it. Upserting on id handles both cases - a fresh insert if no row
+    // exists yet, or filling in the correct church_id/role/name if one
+    // already got created.
+    const { error: upsertError } = await adminClient.from("profiles").upsert({
       id: inviteData.user.id,
       church_id: callerProfile.church_id,
       full_name: fullName,
@@ -97,10 +103,11 @@ Deno.serve(async (req) => {
       is_active: true,
     });
 
-    if (insertError) {
-      // Roll back the auth user so we don't leave an orphaned account with no profile.
+    if (upsertError) {
+      // Only roll back the auth user for genuine failures (e.g. bad role
+      // value), not ones caused by a pre-existing row we just handled above.
       await adminClient.auth.admin.deleteUser(inviteData.user.id);
-      return jsonResponse({ error: insertError.message }, 400);
+      return jsonResponse({ error: upsertError.message }, 400);
     }
 
     return jsonResponse({ success: true, userId: inviteData.user.id });
