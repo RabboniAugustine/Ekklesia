@@ -81,3 +81,13 @@ export async function updateOwnName(id: string, fullName: string) {
 
   if (error) throw error;
 }
+
+export async function inviteTeamMember(params: { email: string; fullName: string; role: string }) {
+  const { data, error } = await supabase.functions.invoke("invite-team-member", {
+    body: { email: params.email.trim(), fullName: params.fullName.trim(), role: params.role },
+  });
+
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data as { success: true; userId: string };
+}

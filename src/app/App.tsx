@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Bell, Search, ChevronDown, Shield, Menu, LogOut,
 } from "lucide-react";
@@ -16,6 +16,7 @@ import { Communication } from "./modules/communication/Communication";
 import { Reports } from "./modules/reports/Reports";
 import { Settings } from "./modules/settings/Settings";
 import { navItems } from "./nav";
+import { getAccessibleModules, canAccessModule } from "./access";
 import type { NavModule } from "./types";
 
 function AppShell() {
@@ -24,6 +25,18 @@ function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
+
+  const accessibleModules = useMemo(() => getAccessibleModules(profile?.role), [profile?.role]);
+  const visibleNavItems = useMemo(() => navItems.filter((item) => accessibleModules.includes(item.id)), [accessibleModules]);
+
+  // Land on the first module this role can actually see, and bail out of
+  // a tab the role loses access to (e.g. after an admin changes their role).
+  useEffect(() => {
+    if (!profile) return;
+    if (!accessibleModules.includes(active)) {
+      setActive(accessibleModules[0] ?? "settings");
+    }
+  }, [profile, accessibleModules, active]);
 
   const userInitials =
     profile?.full_name
@@ -36,6 +49,14 @@ function AppShell() {
   const pageTitle = navItems.find(n => n.id === active)?.label ?? "Dashboard";
 
   const renderContent = () => {
+    if (!canAccessModule(profile?.role, active)) {
+      return (
+        <div className="bg-card border border-border rounded-lg p-8 text-center text-sm text-muted-foreground">
+          Your role doesn't have access to this section.
+        </div>
+      );
+    }
+
     switch (active) {
       case "dashboard": return <Dashboard />;
       case "attendance": return <Attendance />;
@@ -93,7 +114,7 @@ function AppShell() {
 
         {/* Nav */}
         <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = active === item.id;
             return (
               <button

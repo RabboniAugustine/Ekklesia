@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Settings as SettingsIcon, Mail, MessageSquare, DollarSign, Save } from "lucide-react";
+import { Settings as SettingsIcon, Mail, MessageSquare, DollarSign, Save, UserPlus, X } from "lucide-react";
 import { Badge } from "../../components/shared/Badge";
 import { SectionHeader } from "../../components/shared/SectionHeader";
 import { ComingSoonCard } from "../../components/shared/ComingSoonCard";
 import { useAuth } from "../../context/AuthContext";
 import {
   getChurch, updateChurchName,
-  listTeamProfiles, updateProfileRole, setProfileActive, updateOwnName,
+  listTeamProfiles, updateProfileRole, setProfileActive, updateOwnName, inviteTeamMember,
   ROLES, type ChurchRecord, type TeamProfile,
 } from "../../services/settingsService";
 
@@ -14,6 +14,83 @@ const ADMIN_ROLES = ["super_admin", "admin", "pastor"];
 
 function roleLabel(value: string) {
   return ROLES.find((r) => r.value === value)?.label ?? value;
+}
+
+function InviteModal({ onCancel, onInvited }: { onCancel: () => void; onInvited: () => void }) {
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState("usher");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!email.trim() || !fullName.trim()) {
+      setError("Name and email are required.");
+      return;
+    }
+    try {
+      setSaving(true);
+      await inviteTeamMember({ email, fullName, role });
+      onInvited();
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Could not send the invite. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 z-40 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-foreground">Invite Team Member</h2>
+          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground"><X size={18} /></button>
+        </div>
+        {error && <div className="mb-4 border border-rose-200 bg-rose-50 text-rose-700 rounded-lg p-3 text-sm">{error}</div>}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-foreground">Full name</label>
+            <input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="mt-1 w-full border border-border bg-background rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-foreground">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 w-full border border-border bg-background rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-foreground">Role</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="mt-1 w-full border border-border bg-background rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              {ROLES.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-muted-foreground">They'll get an email to set their own password. You never see or set it for them.</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onCancel} className="px-3 py-2 text-sm rounded-lg border border-border hover:bg-muted/60 transition-colors">Cancel</button>
+            <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors">
+              {saving ? "Sending..." : "Send Invite"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 export function Settings() {
@@ -28,6 +105,16 @@ export function Settings() {
   const [loadError, setLoadError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+
+  async function reloadTeam() {
+    if (!profile?.church_id) return;
+    try {
+      setTeam(await listTeamProfiles(profile.church_id));
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   useEffect(() => {
     if (!profile?.church_id) return;
@@ -166,7 +253,17 @@ export function Settings() {
       </div>
 
       <div className="bg-card border border-border rounded-lg p-6">
-        <SectionHeader title="Team" />
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-semibold text-foreground">Team</h2>
+          {isAdmin && (
+            <button
+              onClick={() => setShowInvite(true)}
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <UserPlus size={14} /> Invite Team Member
+            </button>
+          )}
+        </div>
         {!isAdmin && (
           <p className="text-xs text-muted-foreground mb-3">Only admins, pastors, and super admins can change roles or status.</p>
         )}
@@ -216,11 +313,22 @@ export function Settings() {
         </div>
         {isAdmin && (
           <p className="text-xs text-muted-foreground mt-3">
-            Click a status badge to toggle active/deactivated. New staff accounts still need to be created directly in Supabase Auth —
-            self-service invites would need a server-side function, which isn't built yet.
+            Click a status badge to toggle active/deactivated. Invited teammates get an email to set their own password.
           </p>
         )}
       </div>
+
+      {showInvite && (
+        <InviteModal
+          onCancel={() => setShowInvite(false)}
+          onInvited={() => {
+            setShowInvite(false);
+            setSaveMessage("Invite sent.");
+            reloadTeam();
+            setTimeout(() => setSaveMessage(""), 2500);
+          }}
+        />
+      )}
 
       <div>
         <SectionHeader title="Integrations" />
