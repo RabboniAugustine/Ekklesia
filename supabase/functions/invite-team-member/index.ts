@@ -99,8 +99,9 @@ Deno.serve(async (req) => {
 
     if (createError || !createData.user) {
       // If this email already has an auth account (e.g. left over from an
-      // earlier attempt), don't fail - find that account and link/update
-      // their profile instead. Their existing password is left untouched.
+      // earlier attempt), don't fail - find that account, link/update its
+      // profile, and set the password below so the credentials shown to
+      // the admin always actually work.
       const { data: existingUsersPage, error: listError } = await adminClient.auth.admin.listUsers();
       const existingUser = !listError
         ? existingUsersPage.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
@@ -110,6 +111,18 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: createError?.message ?? "Could not create the account" }, 400);
       }
       userId = existingUser.id;
+
+      // Explicitly (re)set the password and confirm the email on the found
+      // account. Without this, the admin sees a "success" screen with a
+      // password that was never actually applied to the account - which is
+      // exactly the bug that caused "Invalid email or password" here.
+      const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
+        password,
+        email_confirm: true,
+      });
+      if (updateError) {
+        return jsonResponse({ error: updateError.message }, 400);
+      }
     } else {
       userId = createData.user.id;
       isNewAuthUser = true;
