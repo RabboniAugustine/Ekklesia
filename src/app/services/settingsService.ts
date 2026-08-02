@@ -82,9 +82,14 @@ export async function updateOwnName(id: string, fullName: string) {
   if (error) throw error;
 }
 
-export async function inviteTeamMember(params: { email: string; fullName: string; role: string }) {
+export async function createTeamMember(params: { email: string; fullName: string; role: string; password: string }) {
   const { data, error } = await supabase.functions.invoke("invite-team-member", {
-    body: { email: params.email.trim(), fullName: params.fullName.trim(), role: params.role },
+    body: {
+      email: params.email.trim(),
+      fullName: params.fullName.trim(),
+      role: params.role,
+      password: params.password,
+    },
   });
 
   if (error) {
@@ -101,4 +106,9 @@ export async function inviteTeamMember(params: { email: string; fullName: string
   }
   if (data?.error) throw new Error(data.error);
   return data as { success: true; userId: string };
+}
+
+export async function updateOwnPassword(newPassword: string) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
 }

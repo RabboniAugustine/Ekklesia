@@ -1,9 +1,11 @@
-// Edge Function: invite-team-member
+// Edge Function: create-team-member
 //
-// Creates a new Supabase Auth user via admin.inviteUserByEmail (which sends
-// them a real invite email so they can set their own password - the app
-// never handles or transmits passwords for other people), then creates
-// their profiles row linked to the inviting admin's church.
+// Creates a new Supabase Auth user with a password the admin sets directly
+// (email_confirm: true, so no confirmation email/redirect-URL step is
+// needed at all), then creates their profiles row linked to the admin's
+// church. The admin is responsible for sharing the password with the
+// person some other way; they should change it themselves afterward via
+// My Account.
 //
 // Deploy with the Supabase CLI:
 //   supabase functions deploy invite-team-member
@@ -35,13 +37,16 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, fullName, role } = await req.json();
+    const { email, fullName, role, password } = await req.json();
 
-    if (!email || !fullName || !role) {
-      return jsonResponse({ error: "email, fullName, and role are required" }, 400);
+    if (!email || !fullName || !role || !password) {
+      return jsonResponse({ error: "email, fullName, role, and password are required" }, 400);
     }
     if (!VALID_ROLES.includes(role)) {
       return jsonResponse({ error: "Invalid role" }, 400);
+    }
+    if (String(password).length < 8) {
+      return jsonResponse({ error: "Password must be at least 8 characters" }, 400);
     }
 
     const authHeader = req.headers.get("Authorization");
@@ -73,7 +78,7 @@ Deno.serve(async (req) => {
     }
 
     if (!ADMIN_ROLES.includes(callerProfile.role)) {
-      return jsonResponse({ error: "Only admins, pastors, or super admins can invite team members" }, 403);
+      return jsonResponse({ error: "Only admins, pastors, or super admins can create team member accounts" }, 403);
     }
 
     // Service-role client for the privileged operations below. Never
@@ -83,25 +88,31 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email);
+    const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
 
     let userId: string;
+    let isNewAuthUser = false;
 
-    if (inviteError || !inviteData.user) {
+    if (createError || !createData.user) {
       // If this email already has an auth account (e.g. left over from an
-      // earlier attempt that didn't fully clean up), don't fail - find that
-      // account and link/update their profile instead of erroring out.
+      // earlier attempt), don't fail - find that account and link/update
+      // their profile instead. Their existing password is left untouched.
       const { data: existingUsersPage, error: listError } = await adminClient.auth.admin.listUsers();
       const existingUser = !listError
         ? existingUsersPage.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
         : null;
 
       if (!existingUser) {
-        return jsonResponse({ error: inviteError?.message ?? "Could not send invite" }, 400);
+        return jsonResponse({ error: createError?.message ?? "Could not create the account" }, 400);
       }
       userId = existingUser.id;
     } else {
-      userId = inviteData.user.id;
+      userId = createData.user.id;
+      isNewAuthUser = true;
     }
 
     // Upsert rather than insert: some Supabase projects have a trigger that
@@ -122,7 +133,7 @@ Deno.serve(async (req) => {
     if (upsertError) {
       // Only roll back a brand-new auth user we just created this call -
       // never delete an account that already existed before this request.
-      if (inviteData?.user) {
+      if (isNewAuthUser) {
         await adminClient.auth.admin.deleteUser(userId);
       }
       return jsonResponse({ error: upsertError.message }, 400);
